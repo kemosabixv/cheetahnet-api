@@ -10,7 +10,7 @@
 	</parent>
 	<packaging>jar</packaging>
 	<groupId>com.cheetahnet</groupId>
-	<artifactId>ping</artifactId>
+	<artifactId>cheetahnet-api</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>ping</name>
 	<description>Microservice app project for cheetahnet</description>

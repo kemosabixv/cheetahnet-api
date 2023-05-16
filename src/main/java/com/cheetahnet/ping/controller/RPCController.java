@@ -31,15 +31,9 @@ public class RPCController {
 
     }
 
-    @GetMapping("/")
-    public String helloWorld() {
-        return "Hello World";
-    }
 
-    @GetMapping("/test")
-    public String ping() {
-        return "This is the ping controller";
-    }
+
+
 
     @GetMapping("/devices")
     public ResponseEntity<List<DeviceEntity>> getDevices() {
@@ -59,8 +53,9 @@ public class RPCController {
             }
         });
 
-        return new ResponseEntity<>(message, HttpStatus.OK);
+        return ResponseEntity.ok(message);
     }
+
 
     @GetMapping("/stop-ping")
     public ResponseEntity<String> stopCheckingDeviceConnectionStatus() {

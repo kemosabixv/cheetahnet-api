@@ -20,7 +20,7 @@ import java.util.concurrent.Executors;
 public class PingService {
     private final DeviceRepository deviceRepository;
 
-    private volatile boolean isRunning = true; // flag to control the loop
+    private volatile boolean isRunning; // flag to control the loop
     @Autowired
     public PingService(DeviceRepository deviceRepository) {
         this.deviceRepository = deviceRepository;
@@ -37,7 +37,7 @@ public class PingService {
     public void checkDeviceConnectionStatus(String phoneNumber) throws InterruptedException {
 
 
-
+        isRunning = true;
         int batchSize = 7;
         while (isRunning) {
             List<DeviceEntity> deviceEntities = (List<DeviceEntity>) deviceRepository.findAll();
