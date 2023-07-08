@@ -46,9 +46,18 @@ public class NetworkInterfacesService {
 
                 return "Interface Name: " + interfaceName + "\nIP Address: " + ipAddress + "\nSubnet: " + subnet;
             } else {
+                networkInterface.setIpAddress("");
+                networkInterface.setSubnet("");
+                networkInterfaceRepository.save(networkInterface);
                 return "IP address or subnet not found for the interface.";
+
             }
+
         } else {
+            networkInterface.setInterfaceName("Not Found");
+            networkInterface.setIpAddress("");
+            networkInterface.setSubnet("");
+            networkInterfaceRepository.save(networkInterface);
             return "Interface not found for the given ID.";
         }
     }

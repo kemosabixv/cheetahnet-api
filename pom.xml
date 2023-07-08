@@ -24,6 +24,10 @@
 			<id>jitpack.io</id>
 			<url>https://jitpack.io</url>
 		</repository>
+		<repository>
+			<id>clojars.org</id>
+			<url>https://clojars.org/repo/</url>
+		</repository>
 	</repositories>
 	<dependencies>
 		<dependency>
@@ -31,9 +35,27 @@
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>org.pcap4j</groupId>
+			<artifactId>pcap4j-core</artifactId>
+			<version>1.8.2</version>
+		</dependency>
+		<dependency>
+			<groupId>org.pcap4j</groupId>
+			<artifactId>pcap4j-packetfactory-static</artifactId>
+			<version>1.8.2</version>
+		</dependency>
+<!--		<dependency>-->
+<!--			<groupId>com.onesignal</groupId>-->
+<!--			<artifactId>OneSignal</artifactId>-->
+<!--			<version>3.15.0</version>-->
+<!--		</dependency>-->
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
+
+
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-devtools</artifactId>

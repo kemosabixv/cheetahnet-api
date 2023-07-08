@@ -1,10 +1,10 @@
 package com.cheetahnet.ping.service;
 import java.net.*;
+import java.util.*;
 
-import java.util.Arrays;
-import java.util.List;
-
+import com.cheetahnet.ping.model.DeviceEntity;
 import com.cheetahnet.ping.model.NetworkInterfaceEntity;
+import com.cheetahnet.ping.repository.DeviceRepository;
 import com.cheetahnet.ping.repository.NetworkInterfaceRepository;
 import com.google.gson.Gson;
 import org.snmp4j.CommunityTarget;
@@ -16,149 +16,364 @@ import org.snmp4j.mp.SnmpConstants;
 import org.snmp4j.smi.*;
 import org.snmp4j.transport.DefaultUdpTransportMapping;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
+@Service
 public class SNMPService {
 
     private final NetworkInterfaceRepository networkInterfaceRepository;
+    private final DeviceRepository deviceRepository;
 
     @Autowired
-    public SNMPService(NetworkInterfaceRepository networkInterfaceRepository) {
+    public SNMPService(NetworkInterfaceRepository networkInterfaceRepository, DeviceRepository deviceRepository) {
         this.networkInterfaceRepository = networkInterfaceRepository;
+        this.deviceRepository = deviceRepository;
     }
 
-    public String scanDevices() throws Exception {
+    public String update_radiomode_connectedfrom() throws Exception {
 
         NetworkInterfaceEntity networkInterfaceEntity = networkInterfaceRepository.findById(1);
         String interfaceName = networkInterfaceEntity.getInterfaceName();
-        String targetAddress = networkInterfaceEntity.getIpAddress();
-        String subnetMask = networkInterfaceEntity.getSubnet();
         NetworkInterface networkInterface = getNetworkInterfaceByName(interfaceName);
         if (networkInterface == null) {
             throw new Exception("Network interface not found");
         }
-
-        // Calculate the network address and broadcast address of the LAN
-        String[] ipAddressParts = targetAddress.split("\\.");
-        String[] subnetMaskParts = subnetMask.split("\\.");
-        int[] networkAddress = new int[4];
-        int[] broadcastAddress = new int[4];
-
-        for (int i = 0; i < 4; i++) {
-            networkAddress[i] = Integer.parseInt(ipAddressParts[i]) & Integer.parseInt(subnetMaskParts[i]);
-            broadcastAddress[i] = networkAddress[i] | (~Integer.parseInt(subnetMaskParts[i]) & 0xff);
+        //get all devices
+        List<DeviceEntity> deviceEntities = deviceRepository.findAll();
+        //get array of ip addresses
+        List<String> ipAddresses = new ArrayList<>();
+        for (DeviceEntity deviceEntity : deviceEntities) {
+            ipAddresses.add(deviceEntity.getIpAddress());
         }
 
-        String subnet = networkAddress[0] + "." + networkAddress[1] + "." + networkAddress[2] + ".";
+        List<Map<String, Object>> responsesArray = new ArrayList<>();
+        List<Map<String, Object>> errorArray = new ArrayList<>();
+        //initialize the arraylist
 
-        // Create a SNMP session
-        TransportMapping transport = new DefaultUdpTransportMapping();
+
+        //get the ip address of the network interface
+        InetAddress inetAddress = networkInterface.getInetAddresses().nextElement();
+        //log the ip address of the network interface
+        System.out.println("IP Address: " + networkInterface.getInetAddresses().nextElement());
+        System.out.println("IP Address: " + inetAddress.getHostAddress());
+        // Create the UDP address for the network interface
+        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/161");
+        /* Create an SNMP session */
+        TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping(udpAddress);
         Snmp snmp = new Snmp(transport);
         transport.listen();
-
+        System.out.println("SNMP Session Created");
         // Define the community target
         CommunityTarget target = new CommunityTarget();
         target.setCommunity(new OctetString("public"));
         target.setRetries(1);
-        target.setTimeout(1500);
-        target.setVersion(SnmpConstants.version2c);
+        target.setTimeout(500);
+        target.setVersion(SnmpConstants.version1);
+        System.out.println("Community Target Created");
+        // Loop through the IP address arraylist and send SNMP requests
+        for (String ipAddress : ipAddresses) {
+//            System.out.println("errorArray: " + errorArray);
 
-        // Loop through the IP address range and send SNMP requests
-        List<Object> resultList = null;
-        for (int i = networkAddress[3] + 1; i < broadcastAddress[3]; i++) {
-            String currentAddress = subnet + i;
-
-            // Add the current address to the  result array
-            Object[] resultArray = {currentAddress};
-
-            //set target address to current address with port 161
-            target.setAddress(new UdpAddress(currentAddress + "/161"));
-
-
+            // Create the target address object using the IP address
+            Address targetAddressObject = new UdpAddress(ipAddress + "/161");
+            target.setAddress(targetAddressObject);
             // Create a PDU for the SNMP request
             PDU pdu = new PDU();
-            pdu.add(new VariableBinding(new OID("1.3.6.1.2.1.1.5.0"))); // SysName OID
-            pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.2"))); // Radio mode OID
-//            pdu.add(new VariableBinding(new OID(".1.3.6.1.2.1.1.3.0"))); // SysUptime OID
-            pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.7.1.2"))); // Connected from OID
-            pdu.add(new VariableBinding(new OID("..1.3.6.1.4.1.41112.1.4.5.1.5.1"))); // Signal OID
-
+//            pdu.add(new VariableBinding(new OID("1.3.6.1.2.1.1.5.0"))); // SysName OID
+            pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.2.1"))); // Radio mode OID
+//           pdu.add(new VariableBinding(new OID(".1.3.6.1.2.1.1.3.0"))); // SysUptime OID
+//            pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.5.1"))); // Signal OID
             pdu.setType(PDU.GET);
+
             ResponseEvent event = snmp.send(pdu, target);
+            System.out.println("SNMP request sent" + ipAddress);
             if (event != null && event.getResponse() != null) {
+                System.out.println("SNMP response received");
                 VariableBinding[] variableBindings = event.getResponse().toArray();
+//                String sysName = variableBindings[0].getVariable().toString();
+                int radioMode = variableBindings[0].getVariable().toInt();
+//                String signal = variableBindings[2].getVariable().toString();
+                String radioModeStr;
+                String currentIp = "ip, " + ipAddress;
+                Map<String, Object> responses = new HashMap<>();
+                if (radioMode == 4 || radioMode == 3 || radioMode == 2) {
+                    radioModeStr = "radio_mode,AP";
+                    String RadioModeSet = "AP";
+                    String connectedFrom = "0";
+                    DeviceEntity deviceEntity = deviceRepository.findByIpAddress(ipAddress);
+                    deviceEntity.setWirelessMode(RadioModeSet);
+                    deviceEntity.setConnectedFrom(connectedFrom);
+                    deviceRepository.save(deviceEntity);
+                    String deviceName = deviceEntity.getDeviceName();
+                    String deviceNameStr = "device_name," + deviceName;
+                    System.out.println("deviceName: " + deviceName);
+                    responses.put(getKey(deviceNameStr), getValue(deviceNameStr));
+                    responses.put(getKey(currentIp), getValue(currentIp));
+                    responses.put(getKey(radioModeStr), getValue(radioModeStr));
+                    responses.put("connected_from", "0");
+                    responsesArray.add(responses);
+                } else {
+                    radioModeStr = "radio_mode,Station";
+                    PDU pdu2 = new PDU();
+                    pdu2.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.7.1.2"))); // ubntStaMac OID
+                    pdu2.setType(PDU.GETNEXT);
+                    ResponseEvent event2 = snmp.send(pdu2, target);
+                    System.out.println("SNMP2 request sent");
+                    if (event2 != null && event2.getResponse() != null) {
+                        System.out.println("SNMP2 response received");
+                        VariableBinding[] variableBindings2 = event2.getResponse().toArray();
+                        String connected_fromStr = variableBindings2[0].getVariable().toString();
+                        System.out.println("connected_fromStr: " + connected_fromStr);
+                        if(Objects.equals(connected_fromStr, "Null")){
+                            connected_fromStr = "disconnected";
+                            String RadioModeSet = "Station";
+                            String connectedFromSet = "0";
+                            String connected_from = "connected_from," + connected_fromStr;
+                            DeviceEntity deviceEntity = deviceRepository.findByIpAddress(ipAddress);
+                            deviceEntity.setWirelessMode(RadioModeSet);
+                            deviceEntity.setConnectedFrom(connectedFromSet);
+                            deviceRepository.save(deviceEntity);
+                            String deviceName = deviceEntity.getDeviceName();
+                            String deviceNameStr = "device_name," + deviceName;
+                            System.out.println("deviceName: " + deviceName);
+                            responses.put(getKey(deviceNameStr), getValue(deviceNameStr));
+                            responses.put(getKey(currentIp), getValue(currentIp));
+                            responses.put(getKey(radioModeStr), getValue(radioModeStr));
+                            responses.put(getKey(connected_from), getValue(connected_from));
+                            responsesArray.add(responses);
 
-                int radioMode = -1;
-                String connectedFrom = null;
-                for (VariableBinding vb : variableBindings) {
-                    OID oid = vb.getOid();
-                    Variable variable = vb.getVariable();
-                    if (oid.toString().equals(".1.3.6.1.4.1.41112.1.4.1.1.2")) {
-                        Integer32 variableInt = (Integer32) variable;
-                        radioMode = variableInt.toInt();
-                    } else if (oid.toString().equals(".1.3.6.1.4.1.41112.1.4.7.1.2") && radioMode == 1) {
-                        OctetString variableString = (OctetString) variable;
-                        connectedFrom = variableString.toString();
-                        //add connected from to result array
-                        resultArray[4] = connectedFrom;
+                        }
+                        else {
+                            String connected_from = "connected_from," + connected_fromStr;
+                            // Get the device name from the connected_fromStr
+                            DeviceEntity DeviceConnectedFrom = deviceRepository.findBydeviceName(connected_fromStr);
+                            // Get the device id from the device name
+                            Long connectedFromDeviceId = DeviceConnectedFrom.getDeviceId();
+                            String RadioModeSet = "Station";
+                            //Get the device from the current IP address
+                            DeviceEntity deviceEntity = deviceRepository.findByIpAddress(ipAddress);
+                            deviceEntity.setWirelessMode(RadioModeSet);
+                            deviceEntity.setConnectedFrom(connectedFromDeviceId.toString());
+                            deviceRepository.save(deviceEntity);
+                            String deviceName = deviceEntity.getDeviceName();
+                            String deviceNameStr = "device_name," + deviceName;
+                            System.out.println("deviceName: " + deviceName);
+                            responses.put(getKey(deviceNameStr), getValue(deviceNameStr));
+                            responses.put(getKey(currentIp), getValue(currentIp));
+                            responses.put(getKey(radioModeStr), getValue(radioModeStr));
+                            responses.put(getKey(connected_from), getValue(connected_from));
+                            responsesArray.add(responses);
+                        }
+                    } else {
+                        System.out.println("SNMP2 response not received");
+                        String RadioModeSet = "Station";
+                        String connectedFromSet = "0";
+                        DeviceEntity deviceEntity = deviceRepository.findByIpAddress(ipAddress);
+                        deviceEntity.setWirelessMode(RadioModeSet);
+                        deviceEntity.setConnectedFrom(connectedFromSet);
+                        deviceRepository.save(deviceEntity);
+                        String deviceName = deviceEntity.getDeviceName();
+                        String deviceNameStr = "device_name," + deviceName;
+                        System.out.println("deviceName: " + deviceName);
+                        responses.put(getKey(deviceNameStr), getValue(deviceNameStr));
+                        responses.put(getKey(currentIp), getValue(currentIp));
+                        responses.put(getKey(radioModeStr), getValue(radioModeStr));
+                        responses.put("connected_from","no response");
                     }
                 }
-
-                if (radioMode != -1) {
-                    String sysName = variableBindings[1].getVariable().toString();
-                    String signal = variableBindings[4].getVariable().toString();
-                    String ipAddress = currentAddress;
-
-                    // Check the radio mode OID and set the radio mode string accordingly
-                    String radioModeStr = "";
-                    if (radioMode == 1) {
-                        radioModeStr = "Station";
-                    } else if (radioMode == 4) {
-                        radioModeStr = "AP";
-                    }
-
-                    // add ipAddress, sysName, radioModeStr, signal to result array
-                    resultArray[1] = ipAddress;
-                    resultArray[2] = sysName;
-                    resultArray[3] = radioModeStr;
-                    resultArray[5] = signal;
-
-
-                }
+            } else {
+                System.out.println("SNMP response not received");
+                Map<String, Object> error = new HashMap<>();
+                DeviceEntity deviceEntity = deviceRepository.findByIpAddress(ipAddress);
+                String deviceName = deviceEntity.getDeviceName();
+                String deviceNameStr = "device_name," + deviceName;
+                System.out.println("deviceName: " + deviceName);
+                error.put(getKey(deviceNameStr), getValue(deviceNameStr));;
+                error.put("ip", ipAddress);
+                error.put("error", "No response");
+                errorArray.add(error);
             }
-            // Add the result array to the result list
-            resultList = Arrays.asList(resultArray);
-
         }
-
         // Close the SNMP session
         snmp.close();
-        //convert result list to json and return it
-        return new Gson().toJson(resultList);
+        System.out.println("SNMP Session Closed");
+        ArrayList<Object> resultArray = new ArrayList<>();
+
+
+        resultArray.add("success_data");
+        resultArray.add(responsesArray);
+        resultArray.add("error_data");
+        resultArray.add(errorArray);
+
+        Gson gson = new Gson();
+        return gson.toJson(resultArray);
+
+
     }
 
-    private static String convertMaskToCIDR(int mask) {
-        int[] bits = new int[32];
-
-        for (int i = 0; i < mask; i++) {
-            bits[i] = 1;
+    public String snmpGetRuntimeDeviceData(String ipaddress) throws Exception {
+        System.out.println(ipaddress);
+        NetworkInterfaceEntity networkInterfaceEntity = networkInterfaceRepository.findById(1);
+        String interfaceName = networkInterfaceEntity.getInterfaceName();
+        NetworkInterface networkInterface = getNetworkInterfaceByName(interfaceName);
+        if (networkInterface == null) {
+            throw new Exception("Network interface not found");
         }
+        List<Map<String, Object>> responsesArray = new ArrayList<>();
+        //get the ip address of the network interface
+        InetAddress inetAddress = networkInterface.getInetAddresses().nextElement();
+        //log the ip address of the network interface
+        System.out.println("IP Address: " + networkInterface.getInetAddresses().nextElement());
+        System.out.println("IP Address: " + inetAddress.getHostAddress());
+        // Create the UDP address for the network interface
+        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5000");
+        /* Create an SNMP session */
+        TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping(udpAddress);
+        Snmp snmp = new Snmp(transport);
+        transport.listen();
+        System.out.println("SNMP Session Created");
+        // Define the community target
+        CommunityTarget target = new CommunityTarget();
+        target.setCommunity(new OctetString("public"));
+        target.setRetries(1);
+        target.setTimeout(500);
+        target.setVersion(SnmpConstants.version1);
+        System.out.println("Community Target Created");
+        //log ip argument
+        System.out.println("target ip: " + ipaddress);
+        //Check for any other instances where the address or port might be used// Create the target address object using the IP address
+        Address targetAddressObject = new UdpAddress(ipaddress + "/161");
+        target.setAddress(targetAddressObject);
+        // Create a PDU for the SNMP request
+        PDU pdu = new PDU();
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.2.1")));//SSID OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.14.1")));//ChanWidth OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.3.1")));//Channel code OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.4.1")));//Frequency OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.6.1")));//RadioTxPower OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.9.1")));//RadioAntenna OID
+        pdu.setType(PDU.GET);
 
-        String binaryMask = "";
-
-        for (int i = 0; i < 32; i += 8) {
-            int octet = 0;
-
-            for (int j = i; j < i + 8; j++) {
-                octet += bits[j] * Math.pow(2, 7 - (j % 8));
-            }
-
-            binaryMask += octet + ".";
+        ResponseEvent event = snmp.send(pdu, target);
+        System.out.println("SNMP request sent" + ipaddress);
+        if (event != null && event.getResponse() != null) {
+            System.out.println("SNMP response received");
+            VariableBinding[] variableBindings = event.getResponse().toArray();
+            System.out.println("responses: " + Arrays.toString(variableBindings));
+            String SSID = variableBindings[0].getVariable().toString();
+            String ChanWidth = variableBindings[1].getVariable().toString();
+            String ChannelCode = variableBindings[2].getVariable().toString();
+            String Frequency = variableBindings[3].getVariable().toString();
+            String RadioTxPower = variableBindings[4].getVariable().toString();
+            String RadioAntenna = variableBindings[5].getVariable().toString();
+            Map<String, Object> response = new HashMap<>();
+            response.put("SSID", SSID);
+            response.put("ChanWidth", ChanWidth);
+            response.put("ChannelCode", ChannelCode);
+            response.put("Frequency", Frequency);
+            response.put("RadioTxPower", RadioTxPower);
+            response.put("RadioAntenna", RadioAntenna);
+            responsesArray.add(response);
+        } else {
+            System.out.println("SNMP request timed out");
         }
-        return binaryMask.substring(0, binaryMask.length() - 1);
+        snmp.close();
+        Gson gson = new Gson();
+        return gson.toJson(responsesArray);
     }
+
+
+    public String snmpGetRecurringDeviceData(String ipaddress) throws Exception {
+        System.out.println(ipaddress);
+        NetworkInterfaceEntity networkInterfaceEntity = networkInterfaceRepository.findById(1);
+        String interfaceName = networkInterfaceEntity.getInterfaceName();
+        NetworkInterface networkInterface = getNetworkInterfaceByName(interfaceName);
+        if (networkInterface == null) {
+            throw new Exception("Network interface not found");
+        }
+        List<Map<String, Object>> responsesArray = new ArrayList<>();
+        //get the ip address of the network interface
+        InetAddress inetAddress = networkInterface.getInetAddresses().nextElement();
+        //log the ip address of the network interface
+        System.out.println("IP Address: " + networkInterface.getInetAddresses().nextElement());
+        System.out.println("IP Address: " + inetAddress.getHostAddress());
+        // Create the UDP address for the network interface
+        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5000");
+        /* Create an SNMP session */
+        TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping(udpAddress);
+        Snmp snmp = new Snmp(transport);
+        transport.listen();
+        System.out.println("SNMP Session Created");
+        // Define the community target
+        CommunityTarget target = new CommunityTarget();
+        target.setCommunity(new OctetString("public"));
+        target.setRetries(1);
+        target.setTimeout(500);
+        target.setVersion(SnmpConstants.version1);
+        System.out.println("Community Target Created");
+        //log ip argument
+        System.out.println("target ip: " + ipaddress);
+        //Check for any other instances where the address or port might be used// Create the target address object using the IP address
+        Address targetAddressObject = new UdpAddress(ipaddress + "/161");
+        target.setAddress(targetAddressObject);
+        // Create a PDU for the SNMP request
+        PDU pdu = new PDU();
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.2.1.1.3.0"))); // SysUptime OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.5.1"))); // Signal OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.6.1.3.1"))); //AirMaxQuality OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.6.1.4.1"))); //AirMaxCapacity OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.7.1")));//CCQ OID
+        pdu.add(new VariableBinding(new OID("..1.3.6.1.4.1.41112.1.4.5.1.15.1")));//Station Count OID
+        //add the OIDs for ifinoctets and ifoutoctets for eth0 and ath0 in if loop to check model using airos5 or airos8
+        pdu.setType(PDU.GET);
+
+        ResponseEvent event = snmp.send(pdu, target);
+        System.out.println("SNMP request sent" + ipaddress);
+        if (event != null && event.getResponse() != null) {
+            System.out.println("SNMP response received");
+            VariableBinding[] variableBindings = event.getResponse().toArray();
+            System.out.println("responses: " + Arrays.toString(variableBindings));
+            String SysUptime = variableBindings[0].getVariable().toString();
+            String signal = variableBindings[1].getVariable().toString();
+            String AirMaxQuality = variableBindings[2].getVariable().toString();
+            String AirMaxCapacity = variableBindings[3].getVariable().toString();
+            String CCQ = variableBindings[4].getVariable().toString();
+            String StationCount = variableBindings[5].getVariable().toString();
+            Map<String, Object> response = new HashMap<>();
+            response.put("SysUptime", SysUptime);
+            response.put("signal", signal);
+            response.put("AirMaxQuality", AirMaxQuality);
+            response.put("AirMaxCapacity", AirMaxCapacity);
+            response.put("CCQ", CCQ);
+            response.put("StationCount", StationCount);
+            responsesArray.add(response);
+        } else {
+            System.out.println("SNMP request timed out");
+        }
+        snmp.close();
+        Gson gson = new Gson();
+        return gson.toJson(responsesArray);
+    }
+
+
+
+
+
+
+
+
 
     private NetworkInterface getNetworkInterfaceByName(String interfaceName) throws SocketException {
         return NetworkInterface.getByName(interfaceName);
+    }
+    private static String getKey(String snmpResponse) {
+        String[] parts = snmpResponse.split(",", 2);
+        return parts[0].trim();
+
+    }
+    private static String getValue(String snmpResponse) {
+        String[] parts = snmpResponse.split(",", 2);
+        return parts[1].trim();
     }
 }
 
