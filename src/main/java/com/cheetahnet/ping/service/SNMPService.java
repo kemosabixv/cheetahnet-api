@@ -1,12 +1,15 @@
 package com.cheetahnet.ping.service;
+
 import java.net.*;
 import java.util.*;
-
 import com.cheetahnet.ping.model.DeviceEntity;
+import com.cheetahnet.ping.model.DeviceHistoryEntitiy;
 import com.cheetahnet.ping.model.NetworkInterfaceEntity;
+import com.cheetahnet.ping.repository.DeviceHistoryRepository;
 import com.cheetahnet.ping.repository.DeviceRepository;
 import com.cheetahnet.ping.repository.NetworkInterfaceRepository;
 import com.google.gson.Gson;
+import java.time.LocalDateTime;
 import org.snmp4j.CommunityTarget;
 import org.snmp4j.PDU;
 import org.snmp4j.Snmp;
@@ -23,11 +26,25 @@ public class SNMPService {
 
     private final NetworkInterfaceRepository networkInterfaceRepository;
     private final DeviceRepository deviceRepository;
+    private final DeviceHistoryRepository deviceHistoryRepository;
 
     @Autowired
-    public SNMPService(NetworkInterfaceRepository networkInterfaceRepository, DeviceRepository deviceRepository) {
+    public SNMPService(NetworkInterfaceRepository networkInterfaceRepository, DeviceRepository deviceRepository, DeviceHistoryRepository deviceHistoryRepository) {
         this.networkInterfaceRepository = networkInterfaceRepository;
         this.deviceRepository = deviceRepository;
+        this.deviceHistoryRepository = deviceHistoryRepository;
+    }
+    private NetworkInterface getNetworkInterfaceByName(String interfaceName) throws SocketException {
+        return NetworkInterface.getByName(interfaceName);
+    }
+    private static String getKey(String snmpResponse) {
+        String[] parts = snmpResponse.split(",", 2);
+        return parts[0].trim();
+
+    }
+    private static String getValue(String snmpResponse) {
+        String[] parts = snmpResponse.split(",", 2);
+        return parts[1].trim();
     }
 
     public String update_radiomode_connectedfrom() throws Exception {
@@ -45,16 +62,15 @@ public class SNMPService {
         for (DeviceEntity deviceEntity : deviceEntities) {
             ipAddresses.add(deviceEntity.getIpAddress());
         }
-
+        //initialize response and error arraylists
         List<Map<String, Object>> responsesArray = new ArrayList<>();
         List<Map<String, Object>> errorArray = new ArrayList<>();
-        //initialize the arraylist
 
 
         //get the ip address of the network interface
         InetAddress inetAddress = networkInterface.getInetAddresses().nextElement();
         //log the ip address of the network interface
-        System.out.println("IP Address: " + networkInterface.getInetAddresses().nextElement());
+        System.out.println("method: update_radiomode_connectedfrom");
         System.out.println("IP Address: " + inetAddress.getHostAddress());
         // Create the UDP address for the network interface
         UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/161");
@@ -72,17 +88,13 @@ public class SNMPService {
         System.out.println("Community Target Created");
         // Loop through the IP address arraylist and send SNMP requests
         for (String ipAddress : ipAddresses) {
-//            System.out.println("errorArray: " + errorArray);
 
             // Create the target address object using the IP address
             Address targetAddressObject = new UdpAddress(ipAddress + "/161");
             target.setAddress(targetAddressObject);
             // Create a PDU for the SNMP request
             PDU pdu = new PDU();
-//            pdu.add(new VariableBinding(new OID("1.3.6.1.2.1.1.5.0"))); // SysName OID
             pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.2.1"))); // Radio mode OID
-//           pdu.add(new VariableBinding(new OID(".1.3.6.1.2.1.1.3.0"))); // SysUptime OID
-//            pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.5.1"))); // Signal OID
             pdu.setType(PDU.GET);
 
             ResponseEvent event = snmp.send(pdu, target);
@@ -90,9 +102,7 @@ public class SNMPService {
             if (event != null && event.getResponse() != null) {
                 System.out.println("SNMP response received");
                 VariableBinding[] variableBindings = event.getResponse().toArray();
-//                String sysName = variableBindings[0].getVariable().toString();
                 int radioMode = variableBindings[0].getVariable().toInt();
-//                String signal = variableBindings[2].getVariable().toString();
                 String radioModeStr;
                 String currentIp = "ip, " + ipAddress;
                 Map<String, Object> responses = new HashMap<>();
@@ -101,6 +111,18 @@ public class SNMPService {
                     String RadioModeSet = "AP";
                     String connectedFrom = "0";
                     DeviceEntity deviceEntity = deviceRepository.findByIpAddress(ipAddress);
+                    //save the previous radio mode and connected from to device history table
+                    long deviceid = deviceEntity.getDeviceId();
+                    DeviceHistoryEntitiy deviceHistoryEntitiy = deviceHistoryRepository.findByDeviceId(deviceid);
+                    String previousRadioMode = deviceEntity.getWirelessMode();
+                    String previousConnectedFrom = deviceEntity.getConnectedFrom();
+                    deviceHistoryEntitiy.setWirelessMode(previousRadioMode);
+                    deviceHistoryEntitiy.setConnectedFrom(previousConnectedFrom);
+                    deviceHistoryEntitiy.setOperation("update");
+                    LocalDateTime dateCreated = LocalDateTime.now();
+                    deviceHistoryEntitiy.setTimeStamp(dateCreated);
+                    deviceHistoryRepository.save(deviceHistoryEntitiy);
+                    //update the radio mode and connected from in device table
                     deviceEntity.setWirelessMode(RadioModeSet);
                     deviceEntity.setConnectedFrom(connectedFrom);
                     deviceRepository.save(deviceEntity);
@@ -130,6 +152,18 @@ public class SNMPService {
                             String connectedFromSet = "0";
                             String connected_from = "connected_from," + connected_fromStr;
                             DeviceEntity deviceEntity = deviceRepository.findByIpAddress(ipAddress);
+                            //save the previous radio mode and connected from to device history table
+                            long deviceid = deviceEntity.getDeviceId();
+                            DeviceHistoryEntitiy deviceHistoryEntitiy = deviceHistoryRepository.findByDeviceId(deviceid);
+                            String previousRadioMode = deviceEntity.getWirelessMode();
+                            String previousConnectedFrom = deviceEntity.getConnectedFrom();
+                            deviceHistoryEntitiy.setWirelessMode(previousRadioMode);
+                            deviceHistoryEntitiy.setConnectedFrom(previousConnectedFrom);
+                            deviceHistoryEntitiy.setOperation("update");
+                            LocalDateTime dateCreated = LocalDateTime.now();
+                            deviceHistoryEntitiy.setTimeStamp(dateCreated);
+                            deviceHistoryRepository.save(deviceHistoryEntitiy);
+                            //update the radio mode and connected from in device table
                             deviceEntity.setWirelessMode(RadioModeSet);
                             deviceEntity.setConnectedFrom(connectedFromSet);
                             deviceRepository.save(deviceEntity);
@@ -152,6 +186,18 @@ public class SNMPService {
                             String RadioModeSet = "Station";
                             //Get the device from the current IP address
                             DeviceEntity deviceEntity = deviceRepository.findByIpAddress(ipAddress);
+                            //save the previous radio mode and connected from to device history table
+                            long deviceid = deviceEntity.getDeviceId();
+                            DeviceHistoryEntitiy deviceHistoryEntitiy = deviceHistoryRepository.findByDeviceId(deviceid);
+                            String previousRadioMode = deviceEntity.getWirelessMode();
+                            String previousConnectedFrom = deviceEntity.getConnectedFrom();
+                            deviceHistoryEntitiy.setWirelessMode(previousRadioMode);
+                            deviceHistoryEntitiy.setConnectedFrom(previousConnectedFrom);
+                            deviceHistoryEntitiy.setOperation("update");
+                            LocalDateTime dateCreated = LocalDateTime.now();
+                            deviceHistoryEntitiy.setTimeStamp(dateCreated);
+                            deviceHistoryRepository.save(deviceHistoryEntitiy);
+                            //update the radio mode and connected from in device table
                             deviceEntity.setWirelessMode(RadioModeSet);
                             deviceEntity.setConnectedFrom(connectedFromDeviceId.toString());
                             deviceRepository.save(deviceEntity);
@@ -169,6 +215,18 @@ public class SNMPService {
                         String RadioModeSet = "Station";
                         String connectedFromSet = "0";
                         DeviceEntity deviceEntity = deviceRepository.findByIpAddress(ipAddress);
+                        //save the previous radio mode and connected from to device history table
+                        long deviceid = deviceEntity.getDeviceId();
+                        DeviceHistoryEntitiy deviceHistoryEntitiy = deviceHistoryRepository.findByDeviceId(deviceid);
+                        String previousRadioMode = deviceEntity.getWirelessMode();
+                        String previousConnectedFrom = deviceEntity.getConnectedFrom();
+                        deviceHistoryEntitiy.setWirelessMode(previousRadioMode);
+                        deviceHistoryEntitiy.setConnectedFrom(previousConnectedFrom);
+                        deviceHistoryEntitiy.setOperation("update");
+                        LocalDateTime dateCreated = LocalDateTime.now();
+                        deviceHistoryEntitiy.setTimeStamp(dateCreated);
+                        deviceHistoryRepository.save(deviceHistoryEntitiy);
+                        //update the radio mode and connected from in device table
                         deviceEntity.setWirelessMode(RadioModeSet);
                         deviceEntity.setConnectedFrom(connectedFromSet);
                         deviceRepository.save(deviceEntity);
@@ -188,7 +246,7 @@ public class SNMPService {
                 String deviceName = deviceEntity.getDeviceName();
                 String deviceNameStr = "device_name," + deviceName;
                 System.out.println("deviceName: " + deviceName);
-                error.put(getKey(deviceNameStr), getValue(deviceNameStr));;
+                error.put(getKey(deviceNameStr), getValue(deviceNameStr));
                 error.put("ip", ipAddress);
                 error.put("error", "No response");
                 errorArray.add(error);
@@ -207,8 +265,6 @@ public class SNMPService {
 
         Gson gson = new Gson();
         return gson.toJson(resultArray);
-
-
     }
 
     public String snmpGetRuntimeDeviceData(String ipaddress) throws Exception {
@@ -223,7 +279,7 @@ public class SNMPService {
         //get the ip address of the network interface
         InetAddress inetAddress = networkInterface.getInetAddresses().nextElement();
         //log the ip address of the network interface
-        System.out.println("IP Address: " + networkInterface.getInetAddresses().nextElement());
+        System.out.println("method: snmpGetRuntimeDeviceData");
         System.out.println("IP Address: " + inetAddress.getHostAddress());
         // Create the UDP address for the network interface
         UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5000");
@@ -252,6 +308,7 @@ public class SNMPService {
         pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.4.1")));//Frequency OID
         pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.6.1")));//RadioTxPower OID
         pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.9.1")));//RadioAntenna OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.2.1.5.2")));//Ifspeed2 OID
         pdu.setType(PDU.GET);
 
         ResponseEvent event = snmp.send(pdu, target);
@@ -266,6 +323,12 @@ public class SNMPService {
             String Frequency = variableBindings[3].getVariable().toString();
             String RadioTxPower = variableBindings[4].getVariable().toString();
             String RadioAntenna = variableBindings[5].getVariable().toString();
+            String lan;
+            if(variableBindings[6].getVariable().toInt() > 0){
+                lan = "Connected";
+            }else {
+                lan = "Disconnected";
+            }
             Map<String, Object> response = new HashMap<>();
             response.put("SSID", SSID);
             response.put("ChanWidth", ChanWidth);
@@ -273,9 +336,11 @@ public class SNMPService {
             response.put("Frequency", Frequency);
             response.put("RadioTxPower", RadioTxPower);
             response.put("RadioAntenna", RadioAntenna);
+            response.put("lan", lan);
             responsesArray.add(response);
         } else {
             System.out.println("SNMP request timed out");
+            snmp.close();
         }
         snmp.close();
         Gson gson = new Gson();
@@ -295,7 +360,7 @@ public class SNMPService {
         //get the ip address of the network interface
         InetAddress inetAddress = networkInterface.getInetAddresses().nextElement();
         //log the ip address of the network interface
-        System.out.println("IP Address: " + networkInterface.getInetAddresses().nextElement());
+        System.out.println("method: snmpGetRecurringDeviceData");
         System.out.println("IP Address: " + inetAddress.getHostAddress());
         // Create the UDP address for the network interface
         UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5000");
@@ -323,8 +388,7 @@ public class SNMPService {
         pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.6.1.3.1"))); //AirMaxQuality OID
         pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.6.1.4.1"))); //AirMaxCapacity OID
         pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.7.1")));//CCQ OID
-        pdu.add(new VariableBinding(new OID("..1.3.6.1.4.1.41112.1.4.5.1.15.1")));//Station Count OID
-        //add the OIDs for ifinoctets and ifoutoctets for eth0 and ath0 in if loop to check model using airos5 or airos8
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.15.1")));//Station Count OID
         pdu.setType(PDU.GET);
 
         ResponseEvent event = snmp.send(pdu, target);
@@ -356,24 +420,172 @@ public class SNMPService {
     }
 
 
+    public Map<String, Object> update_radiomode_connectedfrom_single(String  ipaddress) throws Exception {
+        NetworkInterfaceEntity networkInterfaceEntity = networkInterfaceRepository.findById(1);
+        String interfaceName = networkInterfaceEntity.getInterfaceName();
+        NetworkInterface networkInterface = getNetworkInterfaceByName(interfaceName);
+        if (networkInterface == null) {
+            throw new Exception("Network interface not found");
+        }
+        //get device entity
+        DeviceEntity deviceEntity = deviceRepository.findByIpAddress(ipaddress);
+        System.out.println("deviceEntity: " + deviceEntity);
 
 
+        //get the ip address of the network interface
+        InetAddress inetAddress = networkInterface.getInetAddresses().nextElement();
+        //log the ip address of the network interface
+        System.out.println("method: update_radiomode_connectedfrom_single");
+        System.out.println("IP Address: " + inetAddress.getHostAddress());
+        // Create the UDP address for the network interface
+        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5000");
+        System.out.println("socketaddress");
+        System.out.println(udpAddress);
+        /* Create an SNMP session */
+        TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping(udpAddress);
+        Snmp snmp = new Snmp(transport);
+        transport.listen();
+        System.out.println("SNMP Session Created");
+        // Define the community target
+        CommunityTarget target = new CommunityTarget();
+        target.setCommunity(new OctetString("public"));
+        target.setRetries(1);
+        target.setTimeout(500);
+        target.setVersion(SnmpConstants.version1);
+        System.out.println("Community Target Created");
+        //log ip argument
+        System.out.println("target ip: " + ipaddress);
+        //Check for any other instances where the address or port might be used// Create the target address object using the IP address
+        Address targetAddressObject = new UdpAddress(ipaddress + "/161");
+        target.setAddress(targetAddressObject);
+        // Create a PDU for the SNMP request
+        PDU pdu = new PDU();
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.1.1.2.1"))); // Radio mode OID
+        pdu.setType(PDU.GET);
+        Map<String, Object> responses = new HashMap<>();
+        ResponseEvent event = snmp.send(pdu, target);
+        System.out.println("update_radiomode_connectedfrom_single method socket");
+        System.out.println("SNMP request sent" + ipaddress);
+        if (event != null && event.getResponse() != null) {
+            System.out.println("SNMP response received");
+            VariableBinding[] variableBindings = event.getResponse().toArray();
+            int radioMode = variableBindings[0].getVariable().toInt();
+            if (radioMode == 4 || radioMode == 3 || radioMode == 2) {
+                String RadioModeSet = "AP";
+                String connectedFrom = "0";
+                //save the previous radio mode and connected from to device history table
+                long deviceid = deviceEntity.getDeviceId();
+                DeviceHistoryEntitiy deviceHistoryEntitiy = deviceHistoryRepository.findByDeviceId(deviceid);
+                String previousRadioMode = deviceEntity.getWirelessMode();
+                String previousConnectedFrom = deviceEntity.getConnectedFrom();
+                deviceHistoryEntitiy.setWirelessMode(previousRadioMode);
+                deviceHistoryEntitiy.setConnectedFrom(previousConnectedFrom);
+                deviceHistoryEntitiy.setOperation("update");
+                LocalDateTime dateCreated = LocalDateTime.now();
+                deviceHistoryEntitiy.setTimeStamp(dateCreated);
+                deviceHistoryRepository.save(deviceHistoryEntitiy);
+                //update the radio mode and connected from in device table
+                deviceEntity.setWirelessMode(RadioModeSet);
+                deviceEntity.setConnectedFrom(connectedFrom);
+                deviceRepository.save(deviceEntity);
+                System.out.println("deviceEntity: " + deviceEntity);
+                responses.put("RadioMode", RadioModeSet);
+                responses.put("connectedFrom", connectedFrom);
+            } else {
+                PDU pdu2 = new PDU();
+                pdu2.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.7.1.2"))); // ubntMac
+                pdu2.setType(PDU.GETNEXT);
+                ResponseEvent event2 = snmp.send(pdu2, target);
+                System.out.println("SNMP2 request sent");
+                if (event2 != null && event2.getResponse() != null) {
+                    System.out.println("SNMP2 response received");
+                    VariableBinding[] variableBindings2 = event2.getResponse().toArray();
+                    String connected_fromStr = variableBindings2[0].getVariable().toString();
+                    System.out.println("connected_fromStr: " + connected_fromStr);
+                    if (Objects.equals(connected_fromStr, "Null")) {
+                        String RadioModeSet = "Station";
+                        String connectedFromSet = "0";
+                        //save the previous radio mode and connected from to device history table
+                        long deviceid = deviceEntity.getDeviceId();
+                        DeviceHistoryEntitiy deviceHistoryEntitiy = deviceHistoryRepository.findByDeviceId(deviceid);
+                        String previousRadioMode = deviceEntity.getWirelessMode();
+                        String previousConnectedFrom = deviceEntity.getConnectedFrom();
+                        deviceHistoryEntitiy.setWirelessMode(previousRadioMode);
+                        deviceHistoryEntitiy.setConnectedFrom(previousConnectedFrom);
+                        deviceHistoryEntitiy.setOperation("update");
+                        LocalDateTime dateCreated = LocalDateTime.now();
+                        deviceHistoryEntitiy.setTimeStamp(dateCreated);
+                        deviceHistoryRepository.save(deviceHistoryEntitiy);
+                        //update the radio mode and connected from in device table
+                        deviceEntity.setWirelessMode(RadioModeSet);
+                        deviceEntity.setConnectedFrom(connectedFromSet);
+                        deviceRepository.save(deviceEntity);
+                        System.out.println("deviceEntity: " + deviceEntity);
+                        responses.put("RadioMode", RadioModeSet);
+                        responses.put("connectedFrom", connectedFromSet);
+                    } else {
+                        DeviceEntity DeviceConnectedFrom = deviceRepository.findBydeviceName(connected_fromStr);
+                        // Get the device id from the device name
+                        Long connectedFromDeviceId = DeviceConnectedFrom.getDeviceId();
+                        String RadioModeSet = "Station";
+                        //save the previous radio mode and connected from to device history table
+                        long deviceid = deviceEntity.getDeviceId();
+                        DeviceHistoryEntitiy deviceHistoryEntitiy = deviceHistoryRepository.findByDeviceId(deviceid);
+                        String previousRadioMode = deviceEntity.getWirelessMode();
+                        String previousConnectedFrom = deviceEntity.getConnectedFrom();
+                        deviceHistoryEntitiy.setWirelessMode(previousRadioMode);
+                        deviceHistoryEntitiy.setConnectedFrom(previousConnectedFrom);
+                        deviceHistoryEntitiy.setOperation("update");
+                        LocalDateTime dateCreated = LocalDateTime.now();
+                        deviceHistoryEntitiy.setTimeStamp(dateCreated);
+                        deviceHistoryRepository.save(deviceHistoryEntitiy);
+                        //update the radio mode and connected from in device table
+                        //Get the device from the current IP address
+                        deviceEntity.setWirelessMode(RadioModeSet);
+                        deviceEntity.setConnectedFrom(connectedFromDeviceId.toString());
+                        deviceRepository.save(deviceEntity);
+                        System.out.println("deviceEntity: " + deviceEntity);
+                        responses.put("RadioMode", RadioModeSet);
+                        responses.put("connectedFrom", connectedFromDeviceId.toString());
+                    }
 
-
-
-
-
-    private NetworkInterface getNetworkInterfaceByName(String interfaceName) throws SocketException {
-        return NetworkInterface.getByName(interfaceName);
-    }
-    private static String getKey(String snmpResponse) {
-        String[] parts = snmpResponse.split(",", 2);
-        return parts[0].trim();
-
-    }
-    private static String getValue(String snmpResponse) {
-        String[] parts = snmpResponse.split(",", 2);
-        return parts[1].trim();
+                } else {
+                    System.out.println("SNMP2 response not received");
+                    String RadioModeSet = "Station";
+                    String connectedFromSet = "0";
+                    //save the previous radio mode and connected from to device history table
+                    long deviceid = deviceEntity.getDeviceId();
+                    DeviceHistoryEntitiy deviceHistoryEntitiy = deviceHistoryRepository.findByDeviceId(deviceid);
+                    String previousRadioMode = deviceEntity.getWirelessMode();
+                    String previousConnectedFrom = deviceEntity.getConnectedFrom();
+                    deviceHistoryEntitiy.setWirelessMode(previousRadioMode);
+                    deviceHistoryEntitiy.setConnectedFrom(previousConnectedFrom);
+                    deviceHistoryEntitiy.setOperation("update");
+                    LocalDateTime dateCreated = LocalDateTime.now();
+                    deviceHistoryEntitiy.setTimeStamp(dateCreated);
+                    deviceHistoryRepository.save(deviceHistoryEntitiy);
+                    //update the radio mode and connected from in device table
+                    deviceEntity.setWirelessMode(RadioModeSet);
+                    deviceEntity.setConnectedFrom(connectedFromSet);
+                    deviceRepository.save(deviceEntity);
+                    System.out.println("deviceEntity: " + deviceEntity);
+                    responses.put("RadioMode", RadioModeSet);
+                    responses.put("connectedFrom", connectedFromSet);
+                }
+            }
+        } else {
+            System.out.println("SNMP response not received");
+            String RadioModeSet = "Null";
+            String connectedFromSet = "Null";
+            responses.put("RadioMode", RadioModeSet);
+            responses.put("connectedFrom", connectedFromSet);
+            System.out.println("SNMP Session Closed");
+            snmp.close();
+        }
+        // Close the SNMP session
+        snmp.close();
+        System.out.println("SNMP Session Closed");
+        return responses;
     }
 }
 

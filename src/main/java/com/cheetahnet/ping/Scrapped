@@ -1,0 +1,302 @@
+UBNTDiscovery Class
+//    public synchronized String discoverUBNTDevices() {
+//        synchronized (lock) {
+//            try {
+//                NetworkInterfaceEntity networkInterfaceEntity = networkInterfaceRepository.findById(1);
+//                String interfaceName = networkInterfaceEntity.getInterfaceName();
+//                NetworkInterface networkInterface = NetworkInterface.getByName(interfaceName);
+//                InetAddress ipAddress = InetAddress.getByName(networkInterfaceEntity.getIpAddress());
+//
+//                DatagramChannel channel = DatagramChannel.open(StandardProtocolFamily.INET);
+//                channel.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
+//                channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+//                channel.setOption(StandardSocketOptions.SO_BROADCAST, true);
+//                channel.bind(new InetSocketAddress(ipAddress, 8883));
+//
+//                InetAddress broadcastAddress = InetAddress.getByName("255.255.255.255");
+//                int port = 10001;
+//                byte[] payload = {0x01, 0x00, 0x00, 0x00};
+//
+//                DatagramPacket packet = new DatagramPacket(payload, payload.length, broadcastAddress, port);
+//                channel.send(ByteBuffer.wrap(packet.getData()), new InetSocketAddress(broadcastAddress, port));
+//
+//                List<Map<String, Object>> dataArray = new ArrayList<>();
+//
+//
+//                // Wait for a response within the timeout
+//                ByteBuffer responseBuffer = ByteBuffer.allocate(250);
+//                channel.configureBlocking(false);
+//                channel.socket().setSoTimeout(5000);
+//                Selector selector = Selector.open();
+//                channel.register(selector, SelectionKey.OP_READ);
+//
+//                long startTime = System.currentTimeMillis();
+//                long elapsedTime = 0;
+//
+//                while (elapsedTime < 2000) {
+//                    if (selector.select(2000 - elapsedTime) == 0) {
+//                        break;
+//                    }
+//
+//                    Set<SelectionKey> selectedKeys = selector.selectedKeys();
+//                    for (SelectionKey key : selectedKeys) {
+//                        if (key.isReadable()) {
+//                            while (true) {
+//                                // Clear the response buffer before each receive operation
+//                                responseBuffer.clear();
+//
+//                                System.out.println("receive");
+//                                try {
+//                                    int elapsedTime2 = (int) (System.currentTimeMillis() - startTime);
+//                                    // Receive a datagram
+//
+//                                    SocketAddress senderAddress = channel.receive(responseBuffer);
+//
+//                                    responseBuffer.position(0);
+//
+//                                    for (responseBuffer.get(responseBuffer.position()); responseBuffer.position() < responseBuffer.limit(); responseBuffer.position(responseBuffer.position() + 1)) {
+//                                        System.out.println("position = " + responseBuffer.position());
+//                                        Byte b = responseBuffer.get(responseBuffer.position());
+//                                        System.out.println("value = " + b);
+//                                    }
+//                                    responseBuffer.flip();
+//
+//
+//                                    // Process the received datagram
+//                                    int responseLength = responseBuffer.remaining();
+//                                    byte[] responseBytes = new byte[responseLength];
+//                                    responseBuffer.get(responseBytes);
+//                                    Map<String, Object> responses = processResponse(responseBytes, responseLength);
+//                                    dataArray.add(responses);
+//                                    responseBuffer.clear();
+//                                    if (elapsedTime2 > 2000) {
+//                                        // No more datagrams to receive, break the loop
+//                                        break;
+//                                    }
+//                                } catch (SocketTimeoutException e) {
+//                                    // Timeout reached, exit the loop
+//                                    break;
+//                                }
+//                            }
+//
+//                        }
+//                    }
+//
+//                    elapsedTime = System.currentTimeMillis() - startTime;
+//                }
+//
+//                channel.close();
+//
+//                // Convert the response dataArray to JSON using Gson library
+//                Gson gson = new Gson();
+//                return gson.toJson(dataArray);
+//            } catch (IOException e) {
+//                StringWriter sw = new StringWriter();
+//                PrintWriter pw = new PrintWriter(sw);
+//                e.printStackTrace(pw);
+//                return sw.toString();
+//            }
+//        }
+//    }
+
+
+RPCController
+//    @GetMapping("/discover-radios")
+//    public ResponseEntity<String> discoverRadios() {
+//        String response = ubntDiscoveryService.discoverUBNTDevices();
+//
+//        // Check if the response is an error (stack trace)
+//        if (response.startsWith("java.io.IOException")) {
+//            String errorResponse = "Error discovering radios.";
+//
+//            // Create a HashMap to hold the error response data
+//            HashMap<String, Object> errorResponseMap = new HashMap<>();
+//            errorResponseMap.put("error", errorResponse);
+//
+//            // Return the error response entity with HTTP status INTERNAL_SERVER_ERROR
+//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponseMap.toString());
+//        }
+//
+//        // Return the response entity with the response string and HTTP status OK
+//        return ResponseEntity.ok(response);
+//    }
+
+SNMP Service Class
+//    public String snmpGetThroughputData(String ipaddress) throws Exception {
+//        System.out.println(ipaddress);
+//        NetworkInterfaceEntity networkInterfaceEntity = networkInterfaceRepository.findById(1);
+//        String interfaceName = networkInterfaceEntity.getInterfaceName();
+//        NetworkInterface networkInterface = getNetworkInterfaceByName(interfaceName);
+//        if (networkInterface == null) {
+//            throw new Exception("Network interface not found");
+//        }
+//        List<Map<String, Object>> responsesArray = new ArrayList<>();
+//        //get the ip address of the network interface
+//        InetAddress inetAddress = networkInterface.getInetAddresses().nextElement();
+//        //log the ip address of the network interface
+//        System.out.println("method: snmpGetThroughputData");
+//        System.out.println("IP Address: " + networkInterface.getInetAddresses().nextElement());
+//        System.out.println("IP Address: " + inetAddress.getHostAddress());
+//        // Create the UDP address for the network interface
+//        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5001");
+//        /* Create an SNMP session */
+//        TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping(udpAddress);
+//        Snmp snmp = new Snmp(transport);
+//        transport.listen();
+//        System.out.println("SNMP Session Created");
+//        // Define the community target
+//        CommunityTarget target = new CommunityTarget();
+//        target.setCommunity(new OctetString("public"));
+//        target.setRetries(1);
+//        target.setTimeout(500);
+//        target.setVersion(SnmpConstants.version1);
+//        System.out.println("Community Target Created");
+//        //log ip argument
+//        System.out.println("target ip: " + ipaddress);
+//        //Check for any other instances where the address or port might be used// Create the target address object using the IP address
+//        Address targetAddressObject = new UdpAddress(ipaddress + "/161");
+//        target.setAddress(targetAddressObject);
+//        PDU pdu = new PDU();
+//        pdu.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.1.0"))); // IfNumber OID
+//        pdu.setType(PDU.GET);
+//        String IfCount = null;
+//        ResponseEvent event = snmp.send(pdu, target);
+//        if (event != null && event.getResponse() != null) {
+//            VariableBinding[] variableBindings = event.getResponse().toArray();
+//            System.out.println("Ifnumber responses: " + Arrays.toString(variableBindings));
+//            int IfNumber = variableBindings[0].getVariable().toInt();
+//            if ( IfNumber == 6) {
+//                IfCount = "6";
+//            }
+//            else {
+//                IfCount = "9";
+//            }
+//        } else {
+//            System.out.println("SNMP request timed out");
+//        }
+//        // Create a PDU2 for the SNMP request
+//        PDU pdu2 = new PDU();
+//        if (IfCount == "6"){
+//            pdu2.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.2.1.10.2"))); // IfInOctets2 OID
+//            pdu2.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.2.1.10.5"))); // IfInOctets5 OID
+//            pdu2.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.2.1.16.2"))); // IfOutOctets2 OID
+//            pdu2.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.2.1.16.5"))); // IfOutOctets5 OID
+//        }
+//
+//        else{
+//            pdu2.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.2.1.10.2"))); // IfInOctets2 OID
+//            pdu2.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.2.1.10.7"))); // IfInOctets7 OID
+//            pdu2.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.2.1.16.2"))); // IfOutOctets2 OID
+//            pdu2.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.2.1.16.7"))); // IfOutOctets7 OID
+//        }
+//        pdu2.setType(PDU.GET);
+//
+//        ResponseEvent event2 = snmp.send(pdu2, target);
+//        System.out.println("SNMP request sent" + ipaddress);
+//        if (event2 != null && event2.getResponse() != null) {
+//            VariableBinding[] variableBindings2 = event2.getResponse().toArray();
+//            System.out.println("responses: " + Arrays.toString(variableBindings2));
+//            int InOctetsEth0 = variableBindings2[0].getVariable().toInt();
+//            int InOctetsAth0 = variableBindings2[1].getVariable().toInt();
+//            int OutOctetsEth0 = variableBindings2[2].getVariable().toInt();
+//            int OutOctetsAth0 = variableBindings2[3].getVariable().toInt();
+//            Map<String, Object> response = new HashMap<>();
+//            response.put("InOctetsEth0", InOctetsEth0);
+//            response.put("InOctetsAth0", InOctetsAth0);
+//            response.put("OutOctetsEth0", OutOctetsEth0);
+//            response.put("OutOctetsAth0", OutOctetsAth0);
+//            responsesArray.add(response);
+//        } else {
+//            System.out.println("SNMP request timed out");
+//        }
+//        snmp.close();
+//        Gson gson = new Gson();
+//        return gson.toJson(responsesArray);
+//    }
+//
+//    public String snmpGetStationsData(String ipaddress) throws Exception {
+//        System.out.println(ipaddress);
+//        NetworkInterfaceEntity networkInterfaceEntity = networkInterfaceRepository.findById(1);
+//        String interfaceName = networkInterfaceEntity.getInterfaceName();
+//        NetworkInterface networkInterface = getNetworkInterfaceByName(interfaceName);
+//        if (networkInterface == null) {
+//            throw new Exception("Network interface not found");
+//        }
+//        List<Map<String, Object>> responsesArray = new ArrayList<>();
+//        //get the ip address of the network interface
+//        InetAddress inetAddress = networkInterface.getInetAddresses().nextElement();
+//        //log the ip address of the network interface
+//        System.out.println("method: snmpGetStationsData");
+//        System.out.println("IP Address: " + networkInterface.getInetAddresses().nextElement());
+//        System.out.println("IP Address: " + inetAddress.getHostAddress());
+//        // Create the UDP address for the network interface
+//        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5001");
+//        /* Create an SNMP session */
+//        TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping(udpAddress);
+//        Snmp snmp = new Snmp(transport);
+//        transport.listen();
+//        System.out.println("SNMP Session Created");
+//        // Define the community target
+//        CommunityTarget target = new CommunityTarget();
+//        target.setCommunity(new OctetString("public"));
+//        target.setRetries(1);
+//        target.setTimeout(500);
+//        target.setVersion(SnmpConstants.version1);
+//        System.out.println("Community Target Created");
+//        //log ip argument
+//        System.out.println("target ip: " + ipaddress);
+//        //Check for any other instances where the address or port might be used// Create the target address object using the IP address
+//        Address targetAddressObject = new UdpAddress(ipaddress + "/161");
+//        target.setAddress(targetAddressObject);
+//        PDU pdu1 = new PDU();
+//        pdu1.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.15.1"))); // StationCount OID
+//        pdu1.add(new VariableBinding(new OID(".1.3.6.1.2.1.2.1.0")));//ifnumber
+//        pdu1.setType(PDU.GET);
+//        int statCount = 0;
+//        int IfNumber = 0;
+//        ResponseEvent event1 = snmp.send(pdu1, target);
+//        if (event1 != null && event1.getResponse() != null) {
+//            VariableBinding[] variableBindingsStatCount = event1.getResponse().toArray();
+//            System.out.println("StatCount response: " + Arrays.toString(variableBindingsStatCount));
+//            statCount = variableBindingsStatCount[0].getVariable().toInt();
+//            IfNumber = variableBindingsStatCount[1].getVariable().toInt();
+//        } else {
+//            System.out.println("StatCount SNMP request timed out");
+//        }
+//        OID currentOID;
+//        if (IfNumber == 9){
+//            currentOID = new OID(".1.3.6.1.4.1.41112.1.4.6.1.6.1"); // ubntAirmaxTdd
+//        }
+//        else {
+//            currentOID = new OID(".1.3.6.1.4.1.41112.1.4.6.1.6"); // ubntAirMaxNoAck OID
+//        }
+//
+//        int iterations = statCount * 21;
+//        List<String> variableBindingsStation = new ArrayList<>();
+//
+//        for (int i = 0; i < iterations ; i++) {
+//            PDU pdu2 = new PDU();
+//            // Add the variable binding for the OID you want to query
+//            pdu2.clear();
+//            pdu2.add(new VariableBinding(currentOID));
+//            pdu2.setType(PDU.GETNEXT);
+//
+//            // Send the SNMP request and get the response
+//            ResponseEvent event2 = snmp.send(pdu2, target, null);
+//
+//            if (event2 != null && event2.getResponse() != null) {
+//                VariableBinding vb = event2.getResponse().get(0);
+//                OID responseOID = vb.getOid();
+//                currentOID = responseOID;
+//                Variable variable = vb.getVariable();
+//                variableBindingsStation.add(variable.toString());
+//                System.out.println("Response OID: " + responseOID);
+//                System.out.println("Response Value: " + variable);
+//            } else {
+//                System.out.println("SNMP request timed out");
+//            }
+//        }
+//        snmp.close();
+//        Gson gson = new Gson();
+//        return gson.toJson(variableBindingsStation);
+//    }

@@ -1,14 +1,14 @@
 package com.cheetahnet.ping.service;
 
-
 import com.africastalking.AfricasTalking;
 import com.africastalking.SmsService;
 import com.africastalking.sms.Recipient;
 import com.cheetahnet.ping.model.DeviceEntity;
+import com.cheetahnet.ping.model.MastEntity;
 import com.cheetahnet.ping.repository.DeviceRepository;
+import com.cheetahnet.ping.repository.MastRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -22,10 +22,13 @@ import java.util.concurrent.Executors;
 public class PingService {
     private final DeviceRepository deviceRepository;
 
+    private final MastRepository mastRepository;
+
     private volatile boolean isRunning; // flag to control the loop
     @Autowired
-    public PingService(DeviceRepository deviceRepository) {
+    public PingService(DeviceRepository deviceRepository, MastRepository mastRepository) {
         this.deviceRepository = deviceRepository;
+        this.mastRepository = mastRepository;
     }
 
     public void stopCheckingDeviceConnectionStatus() {
@@ -64,7 +67,6 @@ public class PingService {
                 CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                     for (DeviceEntity device : batch) {
                         System.out.println("Checking device: " + device.getDeviceName() + " with IP: " + device.getIpAddress());
-//                        String status = ping(device, phoneNumber);
                         ping(device, phoneNumber);
 
                     }
@@ -126,34 +128,31 @@ public class PingService {
                     if (connectionStatus.equals("Offline")) {
                         // If the device was previously offline, send a local notification and an SMS
                         sendLocalNotification(exitCode, ipAddress);
-                        String message = "DeviceEntity: " + deviceName + " is back Online. Pinged IP: " + ipAddress;
-//                        boolean messageSent =
-                        sendSMSMessage(phoneNumber, message);
+                        String mastid = deviceEntity.getMastId();
+                        MastEntity mastEntity = mastRepository.findByMastId(mastid);
+                        if(mastEntity.getMastName().equals("Client")){
+                            String message = "DeviceEntity: " + deviceName + " is back Online. Pinged IP: " + ipAddress;
+                            sendSMSMessage(phoneNumber, message);
+                        }
                         String status = "Online";
                         deviceEntity.setConnectionStatus(status);
-                        updateDeviceStatus(deviceEntity);}
-//                        return "Online";
-//                    } else {
-//                        // If the device was already online, update the deviceEntity status to "Online"
-//                        return "Online";
-//                    }
+                        updateDeviceStatus(deviceEntity);
+                    }
                 }
                 default -> {
                     // The ping was unsuccessful (exitCode != 0)
                     if (connectionStatus.equals("Online")) {
                         // If the device was previously online, send a local notification and an SMS
                         sendLocalNotification(exitCode, ipAddress);
-                        String message = "DeviceEntity: " + deviceName + " is Currently Offline. Pinged IP: " + ipAddress;
-//                        boolean messageSent =
-                        sendSMSMessage(phoneNumber, message);
+                        String mastid = deviceEntity.getMastId();
+                        MastEntity mastEntity = mastRepository.findByMastId(mastid);
+                        if(mastEntity.getMastName().equals("Client")){
+                            String message = "DeviceEntity: " + deviceName + " is Currently Offline. Pinged IP: " + ipAddress;
+                            sendSMSMessage(phoneNumber, message);
+                        }
                         String status = "Offline";
                         deviceEntity.setConnectionStatus(status);
                         updateDeviceStatus(deviceEntity);}
-//
-//                    } else {
-//                        // If the device was already offline, no need to send a message
-//                        return "Offline";
-//                    }
                 }
             }
         } catch (IOException | InterruptedException e) {
@@ -172,7 +171,7 @@ public class PingService {
         String apiKey = "9d231c83ae862a529fef4b00aed8cf47ca2626daf898e5cd317703efae35313e";       // use your sandbox app API key for development in the test environment
         AfricasTalking.initialize(username, apiKey);
 
-        // Initialize a service e.g. SMS
+        // Initialize sms service
         SmsService sms = AfricasTalking.getService(AfricasTalking.SERVICE_SMS);
         String[] recipients = {phoneNumber};
         String from = "Ping Service";
@@ -195,15 +194,15 @@ public class PingService {
         try {
             String encodedExitCode = URLEncoder.encode(String.valueOf(exitCode), StandardCharsets.UTF_8);
             String encodedIpAddress = URLEncoder.encode(ip, StandardCharsets.UTF_8);
-            // Create a URL object with the endpoint you want to send the request to
+            // URL object with the endpoint to send the request
             URI uri = new URI("http://localhost/cheetahnet/storenotification/" + encodedIpAddress + "/" + encodedExitCode);
             URL url = uri.toURL();
             System.out.println(url);
 
-            // Open a connection to the URL
+            // Open connection to the URL
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 
-            // Set the request method (GET, POST, etc.)
+            // Set the request method
             connection.setRequestMethod("GET");
 
             // Send the request

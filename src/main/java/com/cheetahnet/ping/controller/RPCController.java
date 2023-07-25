@@ -1,8 +1,10 @@
 package com.cheetahnet.ping.controller;
 
 import com.cheetahnet.ping.model.DeviceEntity;
-import com.cheetahnet.ping.repository.NetworkInterfaceRepository;
-import com.cheetahnet.ping.service.*;
+import com.cheetahnet.ping.service.NetworkInterfacesService;
+import com.cheetahnet.ping.service.PingService;
+import com.cheetahnet.ping.service.SNMPService;
+import com.cheetahnet.ping.service.UBNTDiscoveryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,22 +23,17 @@ import java.util.concurrent.CompletableFuture;
 public class RPCController {
     private final PingService pingService;
     private final NetworkInterfacesService networkInterfacesService;
-    private final NetworkInterfacesService2 networkInterfacesService2;
     private final SNMPService snmpService;
     private final UBNTDiscoveryService ubntDiscoveryService;
-    private final SnmpTestData snmpTestData;
-    private final  DiscoveryTestData discoveryTestData;
+
 
 
     @Autowired
-    public RPCController(PingService pingService, NetworkInterfacesService networkInterfacesService, NetworkInterfacesService2 networkInterfacesService2, SNMPService snmpService, UBNTDiscoveryService ubntDiscoveryService, SnmpTestData snmpTestData, DiscoveryTestData discoveryTestData) {
+    public RPCController(PingService pingService, NetworkInterfacesService networkInterfacesService, SNMPService snmpService, UBNTDiscoveryService ubntDiscoveryService) {
         this.pingService = pingService;
         this.networkInterfacesService = networkInterfacesService;
-        this.networkInterfacesService2 = networkInterfacesService2;
         this.snmpService = snmpService;
         this.ubntDiscoveryService = ubntDiscoveryService;
-        this.snmpTestData = snmpTestData;
-        this.discoveryTestData = discoveryTestData;
 
     }
 
@@ -75,9 +72,6 @@ public class RPCController {
         response.put("isRunning", isRunning);
         return ResponseEntity.ok(response);
     }
-
-    @Autowired
-    private NetworkInterfaceRepository networkInterfaceRepository;
 
     @GetMapping("/update_radiomode_connectedfrom")
     public ResponseEntity<String> update_radiomode_connectedfrom() throws Exception {
@@ -119,61 +113,29 @@ public class RPCController {
         }
     }
 
-    @GetMapping("/return-all-interfaces")
-    public ResponseEntity<String> returnAllInterfaces() {
-        String result = networkInterfacesService2.getAllNetworkInterfacesInfo();
-        if (result != null) {
-            return new ResponseEntity<>(result, HttpStatus.OK);
-        } else {
-            return new ResponseEntity<>("Error retrieving interface information.", HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
 
 
-    @GetMapping("/discover-radios")
-    public ResponseEntity<String> discoverRadios() {
-        String response = ubntDiscoveryService.discoverUBNTDevices();
+    @GetMapping("/update_device/{ipaddress}")
+    public Object[] update_device(@PathVariable("ipaddress") String ipaddress) throws Exception {
+        try{
+            System.out.println(ipaddress);
+            Object[] responses = new Object[3];
+            responses[0] = "Success";
+            responses[1] = snmpService.update_radiomode_connectedfrom_single(ipaddress);
+            responses[2] = ubntDiscoveryService.update_device(ipaddress);
+            return responses;
+        } catch (Exception e) {
+            Object[] responses = new Object[1];
+            responses[0] = "Error; " + e.getMessage();
+            return responses;
 
-        // Check if the response is an error (stack trace)
-        if (response.startsWith("java.io.IOException")) {
-            String errorResponse = "Error discovering radios.";
-
-            // Create a HashMap to hold the error response data
-            HashMap<String, Object> errorResponseMap = new HashMap<>();
-            errorResponseMap.put("error", errorResponse);
-
-            // Return the error response entity with HTTP status INTERNAL_SERVER_ERROR
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponseMap.toString());
         }
 
-        // Return the response entity with the response string and HTTP status OK
-        return ResponseEntity.ok(response);
     }
 
 
 
 
-
-    @GetMapping("/test-data")
-    public String returnTestData() {
-        String jsonData = snmpTestData.getJsonData();
-        System.out.println(jsonData);
-        return jsonData;
-    }
-
-    @GetMapping("/discovery-test-data")
-    public String returnDiscoveryTestData() {
-        String jsonData = discoveryTestData.getJsonData();
-        System.out.println(jsonData);
-        return jsonData;
-    }
-
-    @GetMapping("/discovery-test-data-2")
-    public String returnDiscoveryTestData2() {
-        String jsonData = discoveryTestData.getJsonData2();
-        System.out.println(jsonData);
-        return jsonData;
-    }
 
 
 }

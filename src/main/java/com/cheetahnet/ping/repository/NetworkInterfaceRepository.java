@@ -6,6 +6,4 @@ import org.springframework.stereotype.Repository;
 public interface NetworkInterfaceRepository extends JpaRepository<NetworkInterfaceEntity, Long> {
     NetworkInterfaceEntity findById(int id);
 
-
-
 }

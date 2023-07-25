@@ -2,10 +2,9 @@ package com.cheetahnet.ping.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-
 @Entity
-@Table(name = "tbl_devices")
-public class DeviceEntity {
+@Table(name = "tbl_devices_history")
+public class DeviceHistoryEntitiy {
 
     @Id
     @Column(name = "deviceid")
@@ -44,10 +43,11 @@ public class DeviceEntity {
     @Column(name = "firmware_version")
     private String firmwareVersion;
 
-    @Column(nullable = false, name = "dateCreated")
-    private LocalDateTime dateCreated;
+    @Column(name = "operation")
+    private String operation;
 
-    // Getters and Setters
+    @Column(name = "timestamp")
+    private LocalDateTime timeStamp;
 
     public Long getDeviceId() {
         return deviceId;
@@ -145,11 +145,20 @@ public class DeviceEntity {
         this.firmwareVersion = firmwareVersion;
     }
 
-    public LocalDateTime getDateCreated() {
-        return dateCreated;
+    public String getOperation() {
+        return operation;
     }
 
-    public void setDateCreated(LocalDateTime dateCreated) {
-        this.dateCreated = dateCreated;
+    public void setOperation(String operation) {
+        this.operation = operation;
+    }
+
+    public LocalDateTime getTimeStamp() {
+        return timeStamp;
+    }
+
+    public void setTimeStamp(LocalDateTime timeStamp) {
+        this.timeStamp = timeStamp;
     }
 }
+
