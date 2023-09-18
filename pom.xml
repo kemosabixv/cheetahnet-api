@@ -13,7 +13,7 @@
 	<artifactId>cheetahnet-api</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>ping</name>
-	<description>Microservice app project for cheetahnet</description>
+	<description>REST API app project for cheetahnet</description>
 	<properties>
 		<java.version>20</java.version>
 		<start-class>com.cheetahnet.ping.PingApplication</start-class>
@@ -44,6 +44,7 @@
 			<artifactId>pcap4j-packetfactory-static</artifactId>
 			<version>1.8.2</version>
 		</dependency>
+
 <!--		<dependency>-->
 <!--			<groupId>com.onesignal</groupId>-->
 <!--			<artifactId>OneSignal</artifactId>-->

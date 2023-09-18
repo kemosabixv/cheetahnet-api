@@ -102,31 +102,42 @@ public class NetworkInterfacesService {
     }
 
 
+    // This method takes an 'interfaceName' as input and returns the corresponding subnet for that network interface.
     private String getSubnetForInterface(String interfaceName) {
         try {
+            // Get the NetworkInterface object corresponding to the given 'interfaceName'.
             NetworkInterface networkInterface = NetworkInterface.getByName(interfaceName);
+
+            // Retrieve a list of InterfaceAddresses associated with the network interface.
             List<InterfaceAddress> addresses = networkInterface.getInterfaceAddresses();
+
+            // Iterate through the InterfaceAddresses to find the IPv4 address and its subnet mask.
             for (InterfaceAddress address : addresses) {
                 if (address.getAddress() instanceof Inet4Address) {
+                    // If the address is IPv4, convert the network prefix length to the subnet mask.
                     String subnetMask = convertSubnetMask(address.getNetworkPrefixLength());
-                    return subnetMask;
+                    return subnetMask; // Return the subnet mask.
                 }
             }
         } catch (SocketException e) {
-            e.printStackTrace();
+            e.printStackTrace(); // Print the stack trace if an exception occurs during the network interface retrieval.
         }
 
-        return null; // Handle the case when the interface or subnet mask is not found
+        return null; // Return null in case the specified interface or subnet mask is not found.
     }
 
+    // This method converts the network prefix length to a subnet mask in the form of a dotted decimal notation (e.g., "255.255.255.0").
     private String convertSubnetMask(short prefixLength) {
-        int subnetMask = 0xffffffff << (32 - prefixLength);
-        int octet1 = (subnetMask >> 24) & 0xff;
-        int octet2 = (subnetMask >> 16) & 0xff;
-        int octet3 = (subnetMask >> 8) & 0xff;
-        int octet4 = subnetMask & 0xff;
+        int subnetMask = 0xffffffff << (32 - prefixLength); // Calculate the subnet mask using the network prefix length.
+        int octet1 = (subnetMask >> 24) & 0xff; // Extract the first octet of the subnet mask.
+        int octet2 = (subnetMask >> 16) & 0xff; // Extract the second octet of the subnet mask.
+        int octet3 = (subnetMask >> 8) & 0xff;  // Extract the third octet of the subnet mask.
+        int octet4 = subnetMask & 0xff; // Extract the fourth octet of the subnet mask.
+
+        // Combine the four octets to form the subnet mask in dotted decimal notation (e.g., "255.255.255.0").
         return octet1 + "." + octet2 + "." + octet3 + "." + octet4;
     }
+
 
 
 

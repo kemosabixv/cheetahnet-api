@@ -73,7 +73,7 @@ public class SNMPService {
         System.out.println("method: update_radiomode_connectedfrom");
         System.out.println("IP Address: " + inetAddress.getHostAddress());
         // Create the UDP address for the network interface
-        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/161");
+        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5000");
         /* Create an SNMP session */
         TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping(udpAddress);
         Snmp snmp = new Snmp(transport);
@@ -282,7 +282,7 @@ public class SNMPService {
         System.out.println("method: snmpGetRuntimeDeviceData");
         System.out.println("IP Address: " + inetAddress.getHostAddress());
         // Create the UDP address for the network interface
-        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5000");
+        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5001");
         /* Create an SNMP session */
         TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping(udpAddress);
         Snmp snmp = new Snmp(transport);
@@ -349,7 +349,7 @@ public class SNMPService {
 
 
     public String snmpGetRecurringDeviceData(String ipaddress) throws Exception {
-        System.out.println(ipaddress);
+//        System.out.println(ipaddress);
         NetworkInterfaceEntity networkInterfaceEntity = networkInterfaceRepository.findById(1);
         String interfaceName = networkInterfaceEntity.getInterfaceName();
         NetworkInterface networkInterface = getNetworkInterfaceByName(interfaceName);
@@ -360,24 +360,24 @@ public class SNMPService {
         //get the ip address of the network interface
         InetAddress inetAddress = networkInterface.getInetAddresses().nextElement();
         //log the ip address of the network interface
-        System.out.println("method: snmpGetRecurringDeviceData");
+//        System.out.println("method: snmpGetRecurringDeviceData");
         System.out.println("IP Address: " + inetAddress.getHostAddress());
         // Create the UDP address for the network interface
-        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5000");
+        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5002");
         /* Create an SNMP session */
         TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping(udpAddress);
         Snmp snmp = new Snmp(transport);
         transport.listen();
-        System.out.println("SNMP Session Created");
+//        System.out.println("SNMP Session Created");
         // Define the community target
         CommunityTarget target = new CommunityTarget();
         target.setCommunity(new OctetString("public"));
         target.setRetries(1);
         target.setTimeout(500);
         target.setVersion(SnmpConstants.version1);
-        System.out.println("Community Target Created");
+//        System.out.println("Community Target Created");
         //log ip argument
-        System.out.println("target ip: " + ipaddress);
+//        System.out.println("target ip: " + ipaddress);
         //Check for any other instances where the address or port might be used// Create the target address object using the IP address
         Address targetAddressObject = new UdpAddress(ipaddress + "/161");
         target.setAddress(targetAddressObject);
@@ -389,20 +389,22 @@ public class SNMPService {
         pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.6.1.4.1"))); //AirMaxCapacity OID
         pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.7.1")));//CCQ OID
         pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.15.1")));//Station Count OID
+        pdu.add(new VariableBinding(new OID(".1.3.6.1.4.1.41112.1.4.5.1.8.1"))); //NoiseFloor OID
         pdu.setType(PDU.GET);
 
         ResponseEvent event = snmp.send(pdu, target);
-        System.out.println("SNMP request sent" + ipaddress);
+//        System.out.println("SNMP request sent" + ipaddress);
         if (event != null && event.getResponse() != null) {
-            System.out.println("SNMP response received");
+//            System.out.println("SNMP response received");
             VariableBinding[] variableBindings = event.getResponse().toArray();
-            System.out.println("responses: " + Arrays.toString(variableBindings));
+//            System.out.println("responses: " + Arrays.toString(variableBindings));
             String SysUptime = variableBindings[0].getVariable().toString();
             String signal = variableBindings[1].getVariable().toString();
             String AirMaxQuality = variableBindings[2].getVariable().toString();
             String AirMaxCapacity = variableBindings[3].getVariable().toString();
             String CCQ = variableBindings[4].getVariable().toString();
             String StationCount = variableBindings[5].getVariable().toString();
+            String NoiseFloor = variableBindings[6].getVariable().toString();
             Map<String, Object> response = new HashMap<>();
             response.put("SysUptime", SysUptime);
             response.put("signal", signal);
@@ -410,9 +412,10 @@ public class SNMPService {
             response.put("AirMaxCapacity", AirMaxCapacity);
             response.put("CCQ", CCQ);
             response.put("StationCount", StationCount);
+            response.put("NoiseFloor", NoiseFloor);
             responsesArray.add(response);
         } else {
-            System.out.println("SNMP request timed out");
+//            System.out.println("SNMP request timed out");
         }
         snmp.close();
         Gson gson = new Gson();
@@ -438,9 +441,9 @@ public class SNMPService {
         System.out.println("method: update_radiomode_connectedfrom_single");
         System.out.println("IP Address: " + inetAddress.getHostAddress());
         // Create the UDP address for the network interface
-        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5000");
-        System.out.println("socketaddress");
-        System.out.println(udpAddress);
+        UdpAddress udpAddress = new UdpAddress(inetAddress.getHostAddress() + "/5003");
+        System.out.println("socketaddress" + udpAddress);
+
         /* Create an SNMP session */
         TransportMapping<UdpAddress> transport = new DefaultUdpTransportMapping(udpAddress);
         Snmp snmp = new Snmp(transport);

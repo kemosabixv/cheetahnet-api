@@ -1,29 +1,25 @@
 package com.cheetahnet.ping.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
-
 
 @Entity
 @Table(name = "tbl_masts")
 public class MastEntity {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "mastid")
     private Long mastId;
 
     @Column(nullable = false, name = "mast_name")
-    private String MastName;
+    private String mastName;
 
     @Column(name = "location")
-    private String Location;
+    private String location;
 
     @Column(name = "height")
-    private String Height;
+    private String height;
 
     @Column(name = "connection_via")
     private String connectionVia;
@@ -32,10 +28,10 @@ public class MastEntity {
     private String connectedFrom;
 
 
-    @Column(nullable = false, name = "dateCreated")
+    @Column(nullable = true, name = "dateCreated")
     private LocalDateTime dateCreated;
 
-    // Getters and Setters
+    // Getters and Setters...
 
     public Long getMastId() {
         return mastId;
@@ -46,27 +42,27 @@ public class MastEntity {
     }
 
     public String getMastName() {
-        return MastName;
+        return mastName;
     }
 
     public void setMastName(String mastName) {
-        MastName = mastName;
+        this.mastName = mastName;
     }
 
     public String getLocation() {
-        return Location;
+        return location;
     }
 
     public void setLocation(String location) {
-        Location = location;
+        this.location = location;
     }
 
     public String getHeight() {
-        return Height;
+        return height;
     }
 
     public void setHeight(String height) {
-        Height = height;
+        this.height = height;
     }
 
     public String getConnectionVia() {

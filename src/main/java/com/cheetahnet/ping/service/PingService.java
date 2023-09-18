@@ -1,5 +1,6 @@
 package com.cheetahnet.ping.service;
 
+
 import com.africastalking.AfricasTalking;
 import com.africastalking.SmsService;
 import com.africastalking.sms.Recipient;
@@ -20,35 +21,41 @@ import java.util.concurrent.Executors;
 
 @Service
 public class PingService {
+
     private final DeviceRepository deviceRepository;
 
     private final MastRepository mastRepository;
 
     private volatile boolean isRunning; // flag to control the loop
+    private NetworkInterface getNetworkInterfaceByName(String interfaceName) throws SocketException {
+        return NetworkInterface.getByName(interfaceName);
+    }
     @Autowired
-    public PingService(DeviceRepository deviceRepository, MastRepository mastRepository) {
+    public PingService( DeviceRepository deviceRepository, MastRepository mastRepository) {
         this.deviceRepository = deviceRepository;
         this.mastRepository = mastRepository;
     }
 
-    public void stopCheckingDeviceConnectionStatus() {
-        isRunning = false;
-    }
-
-    public boolean getIsRunning() {
-        return isRunning;
-    }
-    public List<DeviceEntity> fetchAllDevices() {
-        return deviceRepository.findAll();
-    }
-
-    public void updateDeviceStatus(DeviceEntity deviceEntity) {
-        deviceRepository.save(deviceEntity);
-    }
 
     public void checkDeviceConnectionStatus(String phoneNumber) throws InterruptedException {
         isRunning = true;
-        int batchSize = 7;
+        int batchSize = Runtime.getRuntime().availableProcessors();
+
+        int clientMastId = 0;
+        MastEntity mastEntity = mastRepository.findByMastName("Client");
+        System.out.println(mastEntity.getMastName());
+        System.out.println(mastEntity.getMastId());
+        if (mastEntity != null) {
+            try {
+                clientMastId = Integer.parseInt(String.valueOf(mastEntity.getMastId()));
+                System.out.println(clientMastId);
+            } catch (NumberFormatException e) {
+                System.out.println("Error parsing mastId as integer.");
+            }
+        } else {
+            System.out.println("No 'Client' mast found.");
+        }
+
 
         // Continuously check device connection status while the flag is set to true
         while (isRunning) {
@@ -64,10 +71,11 @@ public class PingService {
             // Split the list of devices into batches
             for (List<DeviceEntity> batch : partition(deviceEntities, batchSize)) {
                 // Create a CompletableFuture for each batch of devices
+                int finalClientMastId = clientMastId;
                 CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                     for (DeviceEntity device : batch) {
-                        System.out.println("Checking device: " + device.getDeviceName() + " with IP: " + device.getIpAddress());
-                        ping(device, phoneNumber);
+//                        System.out.println("Checking device: " + device.getDeviceName() + " with IP: " + device.getIpAddress());
+                        ping(device, phoneNumber, finalClientMastId);
 
                     }
                 }, executor);
@@ -83,11 +91,9 @@ public class PingService {
             executor.shutdown();
 
             // Add a delay between iterations
-            Thread.sleep(10000);
+            Thread.sleep(1000);
         }
     }
-
-
 
     private <T> List<List<T>> partition(List<T> list, int size) {
         // Create a list to hold the partitions
@@ -107,52 +113,58 @@ public class PingService {
         return partitions;
     }
 
-
-    private void ping(DeviceEntity deviceEntity, String phoneNumber) {
+    private void ping(DeviceEntity deviceEntity, String phoneNumber, int clientMastId) {
         // Retrieve device information from the DeviceEntity object
         String ipAddress = deviceEntity.getIpAddress();
         String deviceName = deviceEntity.getDeviceName();
         String connectionStatus = deviceEntity.getConnectionStatus();
+        int mastId = Integer.parseInt(deviceEntity.getMastId());
 
         // Use Java ProcessBuilder to run the ping command
-        ProcessBuilder processBuilder = new ProcessBuilder("ping", "-n", "1", "-w", "3000", ipAddress);
+//        ProcessBuilder processBuilder = new ProcessBuilder("ping", "-n", "3", "-w", "4000", ipAddress);
         try {
             // Start the ping process and wait for it to complete
-            Process process = processBuilder.start();
-            int exitCode = process.waitFor();
+            String cmd = "cmd /c ping -n 1 " + ipAddress + " | find \"TTL\"";
+            Process proc = Runtime.getRuntime().exec(cmd);
+            int exitCode = proc.waitFor();
+            System.out.println("pinging " + ipAddress);
+//            int exitCode = process.waitFor();
+            System.out.println(exitCode);
 
             // Process the exit code to determine the ping result
-            switch (exitCode) {
-                case 0 -> {
-                    // The ping was successful (exitCode = 0)
-                    if (connectionStatus.equals("Offline")) {
-                        // If the device was previously offline, send a local notification and an SMS
-                        sendLocalNotification(exitCode, ipAddress);
-                        String mastid = deviceEntity.getMastId();
-                        MastEntity mastEntity = mastRepository.findByMastId(mastid);
-                        if(mastEntity.getMastName().equals("Client")){
+            if (exitCode == 0){
+                if (connectionStatus.equals("Offline")) {
+                    // If the device was previously offline, send a local notification and an SMS
+                    sendLocalNotification(exitCode, ipAddress);
+                    if(mastId != clientMastId){
                             String message = "DeviceEntity: " + deviceName + " is back Online. Pinged IP: " + ipAddress;
                             sendSMSMessage(phoneNumber, message);
                         }
-                        String status = "Online";
-                        deviceEntity.setConnectionStatus(status);
-                        updateDeviceStatus(deviceEntity);
-                    }
+                    String status = "Online";
+                    deviceEntity.setConnectionStatus(status);
+                    updateDeviceStatus(deviceEntity);
+                } else if ((connectionStatus.equals(""))) {
+                    String status = "Online";
+                    deviceEntity.setConnectionStatus(status);
+                    updateDeviceStatus(deviceEntity);
                 }
-                default -> {
-                    // The ping was unsuccessful (exitCode != 0)
-                    if (connectionStatus.equals("Online")) {
-                        // If the device was previously online, send a local notification and an SMS
-                        sendLocalNotification(exitCode, ipAddress);
-                        String mastid = deviceEntity.getMastId();
-                        MastEntity mastEntity = mastRepository.findByMastId(mastid);
-                        if(mastEntity.getMastName().equals("Client")){
+            }
+            // The ping was unsuccessful (exitCode != 0)
+            else if(exitCode !=0){
+                if (connectionStatus.equals("Online")) {
+                    // If the device was previously online, send a local notification and an SMS
+                    sendLocalNotification(exitCode, ipAddress);
+                    if(mastId != clientMastId){
                             String message = "DeviceEntity: " + deviceName + " is Currently Offline. Pinged IP: " + ipAddress;
                             sendSMSMessage(phoneNumber, message);
                         }
-                        String status = "Offline";
-                        deviceEntity.setConnectionStatus(status);
-                        updateDeviceStatus(deviceEntity);}
+                    String status = "Offline";
+                    deviceEntity.setConnectionStatus(status);
+                    updateDeviceStatus(deviceEntity);
+                } else if ((connectionStatus.equals(""))) {
+                    String status = "Offline";
+                    deviceEntity.setConnectionStatus(status);
+                    updateDeviceStatus(deviceEntity);
                 }
             }
         } catch (IOException | InterruptedException e) {
@@ -162,23 +174,20 @@ public class PingService {
         }
     }
 
-
-
-
-    private void sendSMSMessage(String phoneNumber, String message) {
+    public void sendSMSMessage(String phoneNumber, String message) {
         // Initialize
         String username = "cheetah";    // use 'sandbox' for development in the test environment
-        String apiKey = "9d231c83ae862a529fef4b00aed8cf47ca2626daf898e5cd317703efae35313e";       // use your sandbox app API key for development in the test environment
+        String apiKey = "0f6a829fdcc0af768450fca110fc1e4ead9f1373c3606ef8874048ef6eb80835";       // use your sandbox app API key for development in the test environment
         AfricasTalking.initialize(username, apiKey);
 
         // Initialize sms service
         SmsService sms = AfricasTalking.getService(AfricasTalking.SERVICE_SMS);
         String[] recipients = {phoneNumber};
-        String from = "Ping Service";
+//        String from = "Ping Service";
         try {
 
             // Send the SMS
-            List<Recipient> response = sms.send(message, from, recipients, true);
+            List<Recipient> response = sms.send(message, recipients, true);
 
             // Check the response status
             for (Recipient recipient : response) {
@@ -207,6 +216,7 @@ public class PingService {
 
             // Send the request
             int responseCode = connection.getResponseCode();
+            System.out.println("response code:" + responseCode);
 
             // Log "sent" on the console if the request is successful
             if (responseCode == HttpURLConnection.HTTP_OK) {
@@ -221,5 +231,26 @@ public class PingService {
             throw new RuntimeException(e);
         }
     }
+
+    public void updateDeviceStatus(DeviceEntity deviceEntity) {
+        deviceRepository.save(deviceEntity);
+    }
+
+    public void stopCheckingDeviceConnectionStatus() {
+        isRunning = false;
+    }
+
+    public boolean getIsRunning() {
+        return isRunning;
+    }
+
+    public List<DeviceEntity> fetchAllDevices() {
+        return deviceRepository.findAll();
+    }
+
+    public List<MastEntity> fetchAllMasts() {
+        return mastRepository.findAll();
+    }
+
 
 }

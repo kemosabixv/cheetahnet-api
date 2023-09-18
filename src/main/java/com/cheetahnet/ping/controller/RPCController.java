@@ -1,21 +1,28 @@
 package com.cheetahnet.ping.controller;
 
+import com.africastalking.AfricasTalking;
+import com.africastalking.SmsService;
+import com.africastalking.sms.Recipient;
 import com.cheetahnet.ping.model.DeviceEntity;
+import com.cheetahnet.ping.model.MastEntity;
 import com.cheetahnet.ping.service.NetworkInterfacesService;
 import com.cheetahnet.ping.service.PingService;
 import com.cheetahnet.ping.service.SNMPService;
 import com.cheetahnet.ping.service.UBNTDiscoveryService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 @RestController
@@ -41,6 +48,40 @@ public class RPCController {
     public ResponseEntity<List<DeviceEntity>> getDevices() {
         List<DeviceEntity> deviceEntities = pingService.fetchAllDevices();
         return new ResponseEntity<>(deviceEntities, HttpStatus.OK);
+    }
+
+    @GetMapping("/interfaces")
+    public ResponseEntity<List<Map<String, Object>>> getInterfaces() {
+        List<Map<String, Object>> interfaceList = new ArrayList<>();
+        try {
+            // Get all available network interfaces
+            Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
+            int counter = 1;
+            // Iterate through the interfaces and add their names to the list
+            while (networkInterfaces.hasMoreElements()) {
+                NetworkInterface networkInterface = networkInterfaces.nextElement();
+                Map<String, Object> interfaceDetails = new HashMap<>();
+                interfaceDetails.put("#", String.valueOf(counter));
+                interfaceDetails.put("name", networkInterface.getName());
+                interfaceDetails.put("displayname", networkInterface.getDisplayName());
+                interfaceDetails.put("ip", String.valueOf(networkInterface.getInterfaceAddresses()));
+                interfaceList.add(interfaceDetails);
+                counter++;
+
+            }
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            return ResponseEntity.ok().headers(headers).body(interfaceList);
+        } catch (SocketException e) {
+            // Handle the exception if there's an issue with retrieving network interfaces
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    @GetMapping("/masts")
+    public ResponseEntity<List<MastEntity>> getMasts() {
+        List<MastEntity> mastEntities = pingService.fetchAllMasts();
+        return new ResponseEntity<>(mastEntities, HttpStatus.OK);
     }
 
     @GetMapping("/start-ping/{phoneNumber}")
@@ -113,6 +154,28 @@ public class RPCController {
         }
     }
 
+    @GetMapping("/sms-test")
+    public List<Recipient> testSms() throws IOException {
+// Initialize
+        String username = "cheetah";    // use 'sandbox' for development in the test environment
+        String apiKey = "0f6a829fdcc0af768450fca110fc1e4ead9f1373c3606ef8874048ef6eb80835";       // use your sandbox app API key for development in the test environment
+        AfricasTalking.initialize(username, apiKey);
+        String message = "test";
+        String phoneNumber = "+254746839553";
+        String[] recipients = {phoneNumber};
+
+        // Initialize a service e.g. SMS
+        SmsService sms = AfricasTalking.getService(AfricasTalking.SERVICE_SMS);
+
+        // Use the service
+        List<Recipient> response = sms.send(message, recipients, true);
+        return response;
+    }
+
+
+
+
+
 
 
     @GetMapping("/update_device/{ipaddress}")
@@ -123,6 +186,7 @@ public class RPCController {
             responses[0] = "Success";
             responses[1] = snmpService.update_radiomode_connectedfrom_single(ipaddress);
             responses[2] = ubntDiscoveryService.update_device(ipaddress);
+            System.out.println(responses);
             return responses;
         } catch (Exception e) {
             Object[] responses = new Object[1];
